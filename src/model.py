@@ -38,7 +38,8 @@ def main():
     filename = '1.png'
     if len(sys.argv) > 1:
         filename = sys.argv[1]
-    image_path = os.path.join(os.path.dirname(__file__), '..', 'assets', filename)
+    path = os.path.dirname(__file__)
+    image_path = os.path.join(os.path.dirname(path), 'assets', 'test', filename)
 
     if not os.path.exists(image_path):
         print(f"Error: Image not found at {image_path}")  
