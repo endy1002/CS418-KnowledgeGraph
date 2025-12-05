@@ -35,11 +35,11 @@ def preprocess_image(image_path):
         return None
 
 def main():
-    filename = '1.png'
+    filename = 'image.png'
     if len(sys.argv) > 1:
         filename = sys.argv[1]
     path = os.path.dirname(__file__)
-    image_path = os.path.join(os.path.dirname(path), 'assets', 'test', filename)
+    image_path = os.path.join(os.path.dirname(path), 'assets', filename)
 
     if not os.path.exists(image_path):
         print(f"Error: Image not found at {image_path}")  
