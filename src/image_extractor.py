@@ -141,4 +141,6 @@ def extract_non_text_elements(img_path):
 # - idk if it is neat or problematic but formulas are automatically classified as images by PPOCR
 # - it still sucks with Vietnamese
 
-extract_non_text_elements(img_path)
+
+if __name__ == "__main__":
+    extract_non_text_elements(img_path)
