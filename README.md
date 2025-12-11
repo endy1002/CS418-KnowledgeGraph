@@ -55,9 +55,20 @@ Download and install from: https://github.com/UB-Mannheim/tesseract/wiki
 The main script processes all images found in `assets/test/`.
 
 1.  **Place images** you want to process in `assets/test/`.
-2.  **Run the script:**
+2.  **Activate the virtual environment** (if not already activated):
+    ```bash
+    source .venv/bin/activate  # macOS/Linux
+    # .venv\Scripts\activate   # Windows
+    ```
+3.  **Run the script:**
     ```bash
     python src/main.py
+    ```
+    
+    **Note:** If the `python` command is not available on your system, use the full path to the virtual environment's Python interpreter:
+    ```bash
+    .venv/bin/python src/main.py  # macOS/Linux
+    # .venv\Scripts\python.exe src/main.py  # Windows
     ```
 
 ### Output
