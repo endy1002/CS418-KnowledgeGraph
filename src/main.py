@@ -3,7 +3,7 @@ import cv2
 import pytesseract
 from PIL import Image, ImageEnhance, ImageFilter
 from image_extractor import engine, process
-
+import text_cleanup
 import numpy as np
 
 def preprocess_image(img_cv2):
@@ -120,7 +120,7 @@ def process_image(image_path, base_output_dir):
         if processed_img_pil:
             # We use pytesseract on the processed PIL image
             text = pytesseract.image_to_string(processed_img_pil, lang='vie')
-            
+            text_cleanup.cleanup_text(text)
             text_file_path = os.path.join(output_dir, f"{filename}.txt")
             with open(text_file_path, "w", encoding="utf-8") as f:
                 f.write(text)
@@ -137,7 +137,7 @@ def main():
     # User said: test with any image in /assets/testing/
     # If assets/testing exists, use it. Else use assets/test.
     
-    testing_dir = os.path.join(base_dir, "assets", "test")
+    testing_dir = os.path.join(base_dir, "assets", "test1")
     
     results_dir = os.path.join(base_dir, "results")
     
