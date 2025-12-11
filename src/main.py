@@ -1,10 +1,9 @@
 import os
 import cv2
 import pytesseract
-from PIL import Image, ImageEnhance, ImageFilter
+from PIL import Image
 from image_extractor import engine, process
 import text_cleanup
-import numpy as np
 
 def preprocess_image(img_cv2):
     try:
@@ -13,7 +12,7 @@ def preprocess_image(img_cv2):
             return None
             
         # Convert to grayscale
-        gray = cv2.cvtColor(img_cv2, cv2.COLOR_BGR2GRAY)
+        gray = cv2.cvtColor(img_cv2, cv2.COLOR_BGR2RGB)
 
         # Upscale (2x) to help with small details/accents
         # Linear interpolation is usually good enough and faster, or Cubic/Lanczos4 for quality
@@ -21,6 +20,7 @@ def preprocess_image(img_cv2):
         
         # Adaptive Thresholding
         # GaussianC is better for varying lighting than MeanC.
+        """
         thresh = cv2.adaptiveThreshold(
             gray, 255, 
             cv2.ADAPTIVE_THRESH_GAUSSIAN_C, 
@@ -28,9 +28,9 @@ def preprocess_image(img_cv2):
             31, # Block Size (must be odd)
             15  # Constant subtracted from mean (tweak if too black or too white)
         )
-        
+        """
         # Convert back to PIL Image for compatibility with pytesseract
-        return Image.fromarray(thresh)
+        return Image.fromarray(gray)
         
     except Exception as e:
         print(f"Error processing image: {e}")
@@ -50,7 +50,12 @@ def process_image(image_path, base_output_dir):
         if img_original is None:
             print(f"Error: Could not read {image_path}")
             return
-
+        
+        height, width, *_ = img_original.shape
+        max_size = max(height, width)
+        if max_size >= 1920:
+            scale = 1920.0/max_size
+            img_original = cv2.resize(img_original, (0, 0), fx=scale, fy=scale, interpolation=cv2.INTER_CUBIC)
         # Prepare directory for extracted images
         extracted_images_dir = os.path.join(output_dir, "extracted_images")
         os.makedirs(extracted_images_dir, exist_ok=True)
@@ -62,8 +67,7 @@ def process_image(image_path, base_output_dir):
         
         # Create a copy for masking (OCR Image)
         img_for_ocr = img_original.copy()
-        img_h, img_w, _ = img_original.shape
-
+        img_h, img_w, _ = img_original.shape       
         for region_idx, region in enumerate(result):
              # 1. Save Original Sub-Images (PDF embedded images)
             images_list = region.get('imgs_in_doc', [])
@@ -120,7 +124,7 @@ def process_image(image_path, base_output_dir):
         if processed_img_pil:
             # We use pytesseract on the processed PIL image
             text = pytesseract.image_to_string(processed_img_pil, lang='vie')
-            text_cleanup.cleanup_text(text)
+            text = text_cleanup.cleanup_text(text)
             text_file_path = os.path.join(output_dir, f"{filename}.txt")
             with open(text_file_path, "w", encoding="utf-8") as f:
                 f.write(text)
@@ -132,12 +136,14 @@ def process_image(image_path, base_output_dir):
          print(f"Error during processing: {e}")
 
 def main():
+    text_cleanup.configure_model()
+
     # Define paths
     base_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__))) # Project root
     # User said: test with any image in /assets/testing/
     # If assets/testing exists, use it. Else use assets/test.
     
-    testing_dir = os.path.join(base_dir, "assets", "test1")
+    testing_dir = os.path.join(base_dir, "assets", "test2")
     
     results_dir = os.path.join(base_dir, "results")
     

@@ -1,15 +1,13 @@
-5.. Đơn vị cân thuốc:
+5. Đơn vị cân thuốc:
 
 Theo cân lượng thường dùng cân thuốc Đông y (1 cân =
 16 lạng) tính thành gam như sau:
 
-øo T1 cân = 500 gam.
-
-5 T1 lạng = 31,25 gam.
-
-„ 1 đồng cân = 3,1 gam.
-ø T1 phân = 0,31 gam.
-
-5© 1 gam = 3 phân 2 ly.
-
-so †1ly = 0,03 gam.
+<begin items>
+1 cân = 500 gam.
+1 lạng = 31,25 gam.
+1 đồng cân = 3,1 gam.
+1 phân = 0,31 gam.
+1 gam = 3 phân 2 ly.
+1 ly = 0,03 gam.
+<end items>
