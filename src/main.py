@@ -101,9 +101,7 @@ def process_image(image_path, base_output_dir):
                 # Check labels to mask
                 # PPStructure labels: 'text', 'title', 'figure', 'figure_caption', 'table', 'table_caption', 'header', 'footer', 'reference', 'equation'
                 # We want to mask: 'figure', 'table', 'equation' (formula), 'chart'
-
-                if label in ['figure', 'table', 'equation', 'chart', 'formula']:
-
+                
                 if label in ["figure", "table", "equation", "chart", "formula"]:
                     print(f"Found {label}: Masking region [{x1}:{x2}, {y1}:{y2}]")
 
