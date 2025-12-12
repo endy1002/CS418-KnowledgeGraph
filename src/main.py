@@ -124,7 +124,6 @@ def process_image(image_path, base_output_dir):
         if processed_img_pil:
             # We use pytesseract on the processed PIL image
             text = pytesseract.image_to_string(processed_img_pil, lang='vie')
-            text = text_cleanup.cleanup_text(text)
             text_file_path = os.path.join(output_dir, f"{filename}.txt")
             with open(text_file_path, "w", encoding="utf-8") as f:
                 f.write(text)
