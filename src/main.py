@@ -6,11 +6,10 @@ import cv2
 import pytesseract
 from PIL import Image
 
+import label_processor
 import text_cleanup
 from image_extractor import engine, process
 
-import label_processor
-import json
 
 def preprocess_image(img_cv2):
     try:
@@ -105,13 +104,11 @@ def process_image(image_path, base_output_dir):
                 if label in ["figure", "table", "equation", "chart", "formula"]:
                     print(f"Found {label}: Masking region [{x1}:{x2}, {y1}:{y2}]")
 
-
                     # A. Save the element
                     # Add padding for nicer cut
                     pad = 10
                     cx1, cy1 = max(0, x1 - pad), max(0, y1 - pad)
                     cx2, cy2 = min(img_w, x2 + pad), min(img_h, y2 + pad)
-
 
                     element_crop = img_original[cy1:cy2, cx1:cx2]
                     save_path = os.path.join(
@@ -126,14 +123,14 @@ def process_image(image_path, base_output_dir):
         # === 2. NEW: Intelligent Figure/Caption Extraction ===
         """
         det_boxes = region.get('layout_det_res', {}).get('boxes', [])
-        
+
         # Call the new module
         extracted_items, masked_region_img = label_processor.process_region_layout(
-            img_original, 
-            det_boxes, 
+            img_original,
+            det_boxes,
             lang='vie'
         )
-        
+
         # Update our master masking image
         # Since regions might overlap or be the whole page, we can assume 'img_original' is the page
         # And 'masked_region_img' is the processed version of it.
@@ -154,7 +151,7 @@ def process_image(image_path, base_output_dir):
         #             f_name = f"region_{region_idx}_{item['type']}_{i}.jpg"
         #             save_path = os.path.join(extracted_images_dir, f_name)
         #             cv2.imwrite(save_path, item['img'])
-                    
+
         #             # Log Caption
         #             if item['caption']:
         #                 cap_file.write(f"[{f_name}]: {item['caption']}\n")
@@ -171,8 +168,8 @@ def process_image(image_path, base_output_dir):
             html = table.get("pred_html")
             if html:
                 save_path = os.path.join(
-                        extracted_images_dir, f"region_{region_idx}_table_{i}.html"
-                    )
+                    extracted_images_dir, f"region_{region_idx}_table_{i}.html"
+                )
                 with open(save_path, "w", encoding="utf-8") as f:
                     f.write(html)
 
@@ -233,7 +230,7 @@ def main():
 
     print(f"Found {len(files)} images to process.")
 
-    for batch in itertools.batched(files, n=10):
+    for batch in itertools.batched(files, n=15):
         for f in batch:
             filename = os.path.splitext(os.path.basename(f))[0]
             output_text_file = os.path.join(results_dir, filename, f"{filename}.txt")
@@ -250,8 +247,11 @@ def main():
             filename = os.path.splitext(os.path.basename(f))[0]
             output_text_file = os.path.join(results_dir, filename, f"{filename}.txt")
 
-            with open(output_text_file, "r", encoding="utf-8") as f:
-                texts.append(f.read())
+            if os.path.exists(output_text_file):
+                with open(output_text_file, "r", encoding="utf-8") as f:
+                    texts.append(f.read())
+            else:
+                texts.append("")
 
         cleanup_resp = text_cleanup.cleanup_text(json.dumps(texts))
         print(cleanup_resp)
