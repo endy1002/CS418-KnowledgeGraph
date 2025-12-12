@@ -101,7 +101,7 @@ def process_image(image_path, base_output_dir):
                 # Check labels to mask
                 # PPStructure labels: 'text', 'title', 'figure', 'figure_caption', 'table', 'table_caption', 'header', 'footer', 'reference', 'equation'
                 # We want to mask: 'figure', 'table', 'equation' (formula), 'chart'
-                
+
                 if label in ["figure", "table", "equation", "chart", "formula"]:
                     print(f"Found {label}: Masking region [{x1}:{x2}, {y1}:{y2}]")
 
@@ -124,6 +124,7 @@ def process_image(image_path, base_output_dir):
                     cv2.rectangle(img_for_ocr, (x1, y1), (x2, y2), (255, 255, 255), -1)
 
         # === 2. NEW: Intelligent Figure/Caption Extraction ===
+        """
         det_boxes = region.get('layout_det_res', {}).get('boxes', [])
         
         # Call the new module
@@ -162,6 +163,7 @@ def process_image(image_path, base_output_dir):
         #                 print(f"Extracted {item['type']} (No caption)")
 
         # === End of New Section ===
+        """
 
         # 3. Handle Tables (HTML) - just saving, masking already handled by box above usually
         table_list = region.get("table_res_list", [])

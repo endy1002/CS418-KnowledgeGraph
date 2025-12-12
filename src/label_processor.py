@@ -72,9 +72,6 @@ def process_region_layout(img, det_boxes, lang='vie'):
 
         cv2.imwrite(base_path, roi)
 
-        print(f"Found region [{x1}, {x2}], [{y1}, {y2}] with label {label}")
-        input()
-
         # --- A. EXTRACTION LOGIC ---
         
         # # Case 1: It is an Image (Figure/Chart) -> Crop and Save Image
