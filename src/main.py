@@ -124,6 +124,7 @@ def process_image(image_path, base_output_dir):
         if processed_img_pil:
             # We use pytesseract on the processed PIL image
             text = pytesseract.image_to_string(processed_img_pil, lang='vie')
+            # text = text_cleanup.cleanup_text(text) # Uncomment this for refined LLM result
             text_file_path = os.path.join(output_dir, f"{filename}.txt")
             with open(text_file_path, "w", encoding="utf-8") as f:
                 f.write(text)
@@ -135,7 +136,7 @@ def process_image(image_path, base_output_dir):
          print(f"Error during processing: {e}")
 
 def main():
-    text_cleanup.configure_model()
+    # text_cleanup.configure_model() # Uncomment this for refined LLM
 
     # Define paths
     base_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__))) # Project root
