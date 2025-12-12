@@ -209,6 +209,13 @@ def main():
     testing_dir = os.path.join(base_dir, "assets", "data", "250 bài thuốc đông y")
 
     results_dir = os.path.join(base_dir, "results", "dongy250")
+    done_file = os.path.join(results_dir, "done.txt")
+
+    if os.path.exists(done_file):
+        with open(done_file, "r", encoding="utf-8") as f:
+            images_done = {line.strip() for line in f}
+    else:
+        images_done = set()
 
     if not os.path.exists(testing_dir):
         print(f"Error: Testing directory not found at {testing_dir}")
@@ -217,7 +224,7 @@ def main():
     files = [
         f
         for f in os.listdir(testing_dir)
-        if f.lower().endswith((".png", ".jpg", ".jpeg"))
+        if f.lower().endswith((".png", ".jpg", ".jpeg")) and f not in images_done
     ]
 
     if not files:
@@ -228,6 +235,12 @@ def main():
 
     for batch in itertools.batched(files, n=10):
         for f in batch:
+            filename = os.path.splitext(os.path.basename(f))[0]
+            output_text_file = os.path.join(results_dir, filename, f"{filename}.txt")
+
+            if os.path.exists(output_text_file):
+                continue
+
             img_path = os.path.join(testing_dir, f)
             process_image(img_path, results_dir)
 
@@ -244,12 +257,15 @@ def main():
         print(cleanup_resp)
         texts = json.loads(cleanup_resp.text)
 
-        for text, f in zip(texts, batch, strict=True):
-            filename = os.path.splitext(os.path.basename(f))[0]
-            output_text_file = os.path.join(results_dir, filename, f"{filename}.txt")
+        for text, filename in zip(texts, batch, strict=False):
+            basename = os.path.splitext(os.path.basename(filename))[0]
+            output_text_file = os.path.join(results_dir, basename, f"{basename}.txt")
 
             with open(output_text_file, "w", encoding="utf-8") as f:
                 f.write(text)
+
+            with open(done_file, "a", encoding="utf-8") as done_f:
+                done_f.write(f"{filename}\n")
 
         print(f"Processed batch of {len(batch)} images.")
 
