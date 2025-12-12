@@ -5,6 +5,7 @@ from PIL import Image, ImageEnhance, ImageFilter
 from image_extractor import engine, process
 import text_cleanup
 import numpy as np
+import label_processor
 
 def preprocess_image(img_cv2):
     try:
@@ -67,6 +68,7 @@ def process_image(image_path, base_output_dir):
         for region_idx, region in enumerate(result):
              # 1. Save Original Sub-Images (PDF embedded images)
             images_list = region.get('imgs_in_doc', [])
+            print(region['parsing_res_list'])
             for i, img_item in enumerate(images_list):
                  pil_image = img_item['img']
                  if pil_image:
@@ -103,6 +105,41 @@ def process_image(image_path, base_output_dir):
                     # We use exact coordinates for masking to ensure we cover it
                     cv2.rectangle(img_for_ocr, (x1, y1), (x2, y2), (255, 255, 255), -1)
 
+            # === 2. NEW: Intelligent Figure/Caption Extraction ===
+            det_boxes = region.get('layout_det_res', {}).get('boxes', [])
+            
+            # Call the new module
+            extracted_items, masked_region_img = label_processor.process_region_layout(
+                img_original, 
+                det_boxes, 
+                lang='vie'
+            )
+            
+            # Update our master masking image
+            # Since regions might overlap or be the whole page, we can assume 'img_original' is the page
+            # And 'masked_region_img' is the processed version of it.
+            # (If result has 1 region = full page, this works perfectly)
+            img_for_ocr = masked_region_img
+
+            # Save the intelligent extracts
+            # caption_log_path = os.path.join(output_dir, "captions_log.txt")
+            # with open(caption_log_path, "a", encoding="utf-8") as cap_file:
+            #     for i, item in enumerate(extracted_items):
+            #         # Save Image
+            #         if item['img'] is not None and item['img'].size > 0:
+            #             f_name = f"region_{region_idx}_{item['type']}_{i}.jpg"
+            #             save_path = os.path.join(extracted_images_dir, f_name)
+            #             cv2.imwrite(save_path, item['img'])
+                        
+            #             # Log Caption
+            #             if item['caption']:
+            #                 cap_file.write(f"[{f_name}]: {item['caption']}\n")
+            #                 print(f"Extracted {item['type']} with caption: {item['caption'][:30]}...")
+            #             else:
+            #                 print(f"Extracted {item['type']} (No caption)")
+
+            # === End of New Section ===
+
             # 3. Handle Tables (HTML) - just saving, masking already handled by box above usually
             table_list = region.get('table_res_list', [])
             for i, table in enumerate(table_list):
@@ -112,7 +149,7 @@ def process_image(image_path, base_output_dir):
                     with open(save_path, "w", encoding='utf-8') as f:
                         f.write(html)
 
-        # --- 2. OCR (Text Extraction on Masked Image) ---
+        # --- new 2. OCR (Text Extraction on Masked Image) ---
         print("--- Running OCR (Text) ---")
         # Preprocess the MASKED image
         processed_img_pil = preprocess_image(img_for_ocr)
@@ -137,7 +174,7 @@ def main():
     # User said: test with any image in /assets/testing/
     # If assets/testing exists, use it. Else use assets/test.
     
-    testing_dir = os.path.join(base_dir, "assets", "test1")
+    testing_dir = os.path.join(base_dir, "assets", "test")
     
     results_dir = os.path.join(base_dir, "results")
     

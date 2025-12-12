@@ -1,6 +1,6 @@
 import google.generativeai as genai
 
-API_KEY = "AIzaSyBYbhn4lzXqG2oF-IMj5ebFVRffhHSvHiU"
+API_KEY = "AIzaSyA22Rd8yKKTfEc2ljPK-1oi5wvrGvX3LOg"
 genai.configure(api_key=API_KEY)
 
 model = genai.GenerativeModel("gemini-flash-latest")
@@ -19,4 +19,4 @@ def cleanup_text(dirty_text):
 
     response = model.generate_content(prompt)
     print(response.text)
-    dirty_text = response
+    dirty_text = response.text
