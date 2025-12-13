@@ -47,6 +47,18 @@ Download and install from: https://github.com/UB-Mannheim/tesseract/wiki
     pip install pytesseract pillow opencv-python paddlepaddle paddleocr "paddlex[ocr]"
     ```
     *Note: `paddlepaddle` installation may vary based on your OS/GPU. See [PaddlePaddle website](https://www.paddlepaddle.org.cn/en) if issues arise.*
+    
+> [!TIP]
+> You can also use [`uv`](https://docs.astral.sh/uv/) for a simpler installation:
+> ```shell
+> uv sync --extra cpu
+> 
+> # Or one of the CUDA extras if you have GPU compute:
+> uv sync --extra cu118
+> uv sync --extra cu126
+> uv sync --extra cu129
+> uv sync --extra cu130
+> ```
 
 ## Usage
 
