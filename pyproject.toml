@@ -8,7 +8,6 @@ dependencies = [
     "google-generativeai>=0.8.5",
     "opencv-python>=4.12.0.88",
     "paddleocr>=3.3.2",
-    "paddlepaddle==3.2.2",
     "paddlex[ocr]>=3.3.11",
     "pillow>=12.0.0",
     "pytesseract>=0.3.13",
@@ -16,8 +15,32 @@ dependencies = [
     "setuptools>=80.9.0",
 ]
 
+[project.optional-dependencies]
+cpu = ["paddlepaddle==3.2.2"]
+cu118 = ["paddlepaddle-gpu==3.2.2"]
+cu126 = ["paddlepaddle-gpu==3.2.2"]
+cu129 = ["paddlepaddle-gpu==3.2.2"]
+cu130 = ["paddlepaddle-gpu==3.2.2"]
+
+[tool.uv]
+conflicts = [
+    [
+        { extra = "cpu" },
+        { extra = "cu118" },
+        { extra = "cu126" },
+        { extra = "cu129" },
+        { extra = "cu130" },
+    ]
+]
+
 [tool.uv.sources]
 paddlepaddle = { index = "paddlepaddle" }
+paddlepaddle-gpu = [
+    { index = "paddlepaddle-cu118", extra = "cu118" },
+    { index = "paddlepaddle-cu126", extra = "cu126" },
+    { index = "paddlepaddle-cu129", extra = "cu129" },
+    { index = "paddlepaddle-cu130", extra = "cu130" },
+]
 
 [[tool.uv.index]]
 name = "paddlepaddle"
@@ -25,6 +48,21 @@ url = "https://www.paddlepaddle.org.cn/packages/stable/cpu/"
 explicit = true
 
 [[tool.uv.index]]
-name = "paddlepaddle-gpu"
+name = "paddlepaddle-cu118"
+url = "https://www.paddlepaddle.org.cn/packages/stable/cu118/"
+explicit = true
+
+[[tool.uv.index]]
+name = "paddlepaddle-cu126"
+url = "https://www.paddlepaddle.org.cn/packages/stable/cu126/"
+explicit = true
+
+[[tool.uv.index]]
+name = "paddlepaddle-cu129"
+url = "https://www.paddlepaddle.org.cn/packages/stable/cu129/"
+explicit = true
+
+[[tool.uv.index]]
+name = "paddlepaddle-cu130"
 url = "https://www.paddlepaddle.org.cn/packages/stable/cu130/"
 explicit = true
