@@ -203,9 +203,11 @@ def main():
     # User said: test with any image in /assets/testing/
     # If assets/testing exists, use it. Else use assets/test.
 
-    testing_dir = os.path.join(base_dir, "assets", "data", "250 bài thuốc đông y")
+    testing_dir = os.path.join(
+        base_dir, "assets", "data", "Y Dược truyền thống Trung Quốc"
+    )
 
-    results_dir = os.path.join(base_dir, "results", "dongy250")
+    results_dir = os.path.join(base_dir, "results", "yduoctruyenthong")
     done_file = os.path.join(results_dir, "done.txt")
 
     if os.path.exists(done_file):
@@ -230,7 +232,7 @@ def main():
 
     print(f"Found {len(files)} images to process.")
 
-    for batch in itertools.batched(files, n=15):
+    for batch in itertools.batched(files, n=10):
         for f in batch:
             filename = os.path.splitext(os.path.basename(f))[0]
             output_text_file = os.path.join(results_dir, filename, f"{filename}.txt")
@@ -253,13 +255,15 @@ def main():
             else:
                 texts.append("")
 
-        cleanup_resp = text_cleanup.cleanup_text(json.dumps(texts))
+        cleanup_resp = text_cleanup.cleanup_text(texts)
         print(cleanup_resp)
         texts = json.loads(cleanup_resp.text)
 
-        for text, filename in zip(texts, batch, strict=False):
+        for text, filename in zip(texts, batch, strict=True):
             basename = os.path.splitext(os.path.basename(filename))[0]
-            output_text_file = os.path.join(results_dir, basename, f"{basename}.txt")
+            output_text_file = os.path.join(
+                results_dir, basename, f"{basename}.spellfix.txt"
+            )
 
             with open(output_text_file, "w", encoding="utf-8") as f:
                 f.write(text)

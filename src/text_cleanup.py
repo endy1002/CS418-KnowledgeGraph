@@ -1,16 +1,19 @@
+import json
 import os
 
-import google.generativeai as genai
 from dotenv import load_dotenv
+from google import genai
 
 
 def configure_model():
-    load_dotenv()
-    genai.configure(api_key=os.getenv("GEMINI_API_KEY"))
+    pass
 
 
-def cleanup_text(dirty_text):
-    model = genai.GenerativeModel("gemini-flash-latest")
+load_dotenv()
+client = genai.Client(api_key=os.getenv("GEMINI_API_KEY"))
+
+
+def cleanup_text(dirty_text: list[str]):
     prompt = f"""
     I have some text extracted via OCR that contains noise and formatting errors.
     The text is related to traditional Eastern medicine.
@@ -19,7 +22,6 @@ def cleanup_text(dirty_text):
     - Correct each element individually and return **only** the
     corresponding JSON array. Do not wrap the array in Markdown or any other form of formatting.
     - For each element in the array, if the provided element is blank, then the corresponding output element should also be blank.
-    - The returned JSON array must have the same number of elements as the provided JSON array.
 
     - Do not make up new content if there's too little text!
     - Do not change words into synonyms, only correct spelling and punctuation errors.
@@ -29,8 +31,21 @@ def cleanup_text(dirty_text):
     formatting for anything else.
 
     Text to clean:
-    {dirty_text}
+    {json.dumps(dirty_text)}
     """
 
-    response = model.generate_content(prompt)
+    response = client.models.generate_content(
+        model="gemini-flash-latest",
+        contents=prompt,
+        config={
+            "response_mime_type": "application/json",
+            "response_json_schema": {
+                "type": "array",
+                "items": {"type": "string"},
+                "minItems": len(dirty_text),
+                "maxItems": len(dirty_text),
+            },
+        },
+    )
+
     return response
