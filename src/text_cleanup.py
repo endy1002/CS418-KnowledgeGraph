@@ -22,6 +22,7 @@ def cleanup_text(dirty_text: list[str]):
     - Correct each element individually and return **only** the
     corresponding JSON array. Do not wrap the array in Markdown or any other form of formatting.
     - For each element in the array, if the provided element is blank, then the corresponding output element should also be blank.
+    - Respect existing linebreaks and preserve them in the output.
 
     - Do not make up new content if there's too little text!
     - Do not change words into synonyms, only correct spelling and punctuation errors.
