@@ -46,6 +46,7 @@ def cleanup_text(dirty_text: list[str]):
                 "minItems": len(dirty_text),
                 "maxItems": len(dirty_text),
             },
+            "temperature": 0.3,
         },
     )
 

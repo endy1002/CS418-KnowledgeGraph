@@ -1,9 +1,11 @@
 import itertools
 import json
 import os
+import time
 
 import cv2
 import pytesseract
+from google.genai.types import FinishReason
 from PIL import Image
 
 import label_processor
@@ -232,7 +234,7 @@ def main():
 
     print(f"Found {len(files)} images to process.")
 
-    for batch in itertools.batched(files, n=10):
+    for batch in itertools.batched(files, n=2):
         for f in batch:
             filename = os.path.splitext(os.path.basename(f))[0]
             output_text_file = os.path.join(results_dir, filename, f"{filename}.txt")
@@ -255,9 +257,35 @@ def main():
             else:
                 texts.append("")
 
-        cleanup_resp = text_cleanup.cleanup_text(texts)
+        retries = itertools.count(1)
+
+        while next(retries) <= 5:
+            cleanup_resp = text_cleanup.cleanup_text(texts)
+
+            if not cleanup_resp.candidates:
+                time.sleep(5)
+                continue
+
+            candidate = cleanup_resp.candidates[0]
+            text = cleanup_resp.text
+
+            # not entirely sure why the LLM does this sometimes but sure ig
+            if (
+                candidate.finish_reason == FinishReason.MAX_TOKENS
+                and text is not None
+                and text.count("\n") > 500
+            ):
+                time.sleep(5)
+                continue
+
+            if text is None:
+                time.sleep(5)
+                continue
+
+            break
+
         print(cleanup_resp)
-        texts = json.loads(cleanup_resp.text)
+        texts = json.loads(text)
 
         for text, filename in zip(texts, batch, strict=True):
             basename = os.path.splitext(os.path.basename(filename))[0]
