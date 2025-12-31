@@ -2,13 +2,20 @@ import os
 import re
 import unicodedata
 import json
+from dotenv import load_dotenv
 from docx import Document
 from docx.document import Document as _Document
 from docx.oxml.text.paragraph import CT_P
 from docx.oxml.table import CT_Tbl
 from docx.table import _Cell, Table
 from docx.text.paragraph import Paragraph
+from underthesea import sent_tokenize
+import py_vncorenlp
 import table_processing
+
+load_dotenv()
+os.environ["JAVA_HOME"] = os.getenv("JAVA_HOME") # Set JAVA_HOME for py_vncorenlp, use your actual path that supports Java 8+, x64.
+rdrsegmenter = py_vncorenlp.VnCoreNLP(annotators=["wseg"], save_dir=os.getcwd())
 
 def locate_corpus_files(corpus_dir, file_extension):
     """
@@ -31,10 +38,11 @@ def locate_corpus_files(corpus_dir, file_extension):
     
     return matched_files
 
+# ==========================================
+# 1. HELPERS & DETECTORS
+# ==========================================
+
 def iter_block_items(parent):
-    """
-    Yields Table or Paragraph objects in order.
-    """
     if isinstance(parent, _Document):
         parent_elm = parent.element.body
     elif isinstance(parent, _Cell):
@@ -48,128 +56,150 @@ def iter_block_items(parent):
         elif isinstance(child, CT_Tbl):
             yield Table(child, parent)
 
+def has_image(paragraph):
+    """Checks if paragraph contains an image (drawing or shape)."""
+    return bool(paragraph._p.xpath('.//w:drawing') or paragraph._p.xpath('.//w:pict'))
+
 def is_list_item_xml(paragraph):
-    """
-    Check if it is a list using Word's internal XML (Best for formatted docs).
-    """
-    if paragraph._p.pPr is not None and paragraph._p.pPr.numPr is not None:
-        return True
-    return False
+    return paragraph._p.pPr is not None and paragraph._p.pPr.numPr is not None
 
 def is_list_item_regex(text):
-    """
-    Check if it looks like a list using Regex (Fallback for raw text).
-    Matches: 
-      - Numbers: "1.", "1)", "01."
-      - Letters: "a.", "b)"
-      - Symbols: "•", "-", "*", "°", "▪", "+"
-    """
-    # 1. Define the set of bullet symbols you want to support
-    bullet_symbols = r"•\-\*°▪+" 
-    
-    # 2. Construct the regex
-    # ^        : Start of string
-    # [\s\t]* : Optional whitespace indentation
-    # (?: ... ): Non-capturing group for the alternatives
-    # \s+      : Must have whitespace after the bullet (e.g. "° " not "°C")
+    # Removed '-' to prevent confusion with hyphens, added common symbols
+    bullet_symbols = r"•\*°▪+" 
     pattern = rf'^[\s\t]*(?:\d{{1,2}}[\.\)]|[a-z][\.\)]|[{bullet_symbols}])\s+'
-    
     return re.match(pattern, text) is not None
-
 
 def clean_text(text):
     text = unicodedata.normalize('NFC', text)
-    # Note: We do NOT remove newlines here because we want to detect block boundaries
+    text = re.sub(r'([a-zA-Zà-ỹÀ-Ỹ,;-])\n([a-zà-ỹ])', r'\1 \2', text)
     return text.strip()
+
+# ==========================================
+# 2. TABLE PARSERS (Your Adaptive Strategy)
+# ==========================================
+# (Keep the smart_process_table functions we defined previously here)
+# For brevity, I will call a placeholder. Ensure you include the "Transposed" logic here.
+def smart_process_table(table, context):
+    # ... [Insert the Smart Router logic from previous steps] ...
+    # For now, returning basic rows to keep script runnable
+    return [f"{context}: Table Row Data"] 
+
+# ==========================================
+# 3. MAIN PIPELINE
+# ==========================================
 
 def process_document(file_path):
     doc = Document(file_path)
     
     all_sections = []
-    current_section = {"id": 1, "sentences": []}
+    current_section = {"id": 1, "sentences": [], "figures": []}
     
-    # --- NEW STATE VARIABLE: THE BUFFER ---
-    # Holds text that is "waiting" to see if the next line continues it.
-    pending_text = ""
+    # --- STATE VARIABLES ---
+    pending_text = ""       # For merging lowercase sentences
+    in_list_block = False   # To track list item siblings
+    last_lead_in = ""       # The "Title" context for lists
+    expecting_caption = False # The "Trap" for the next line
     
-    # Context memory for lists/tables
-    last_lead_in = "" 
-    list_counter = 0
-    in_list_block = False
-
     print(f"--- Processing {file_path} ---")
 
     for block in iter_block_items(doc):
         
-        # ==================================================
-        # CASE 1: TABLE (Always breaks the flow)
-        # ==================================================
+        # ------------------------------------
+        # A. HANDLE TABLES
+        # ------------------------------------
         if isinstance(block, Table):
-            # 1. Flush any pending text first (Table means previous sent is done)
+            expecting_caption = False # Table breaks image-caption flow
+            
+            # Flush pending text (previous sentence is done)
             if pending_text:
                 current_section["sentences"].append(pending_text)
-                last_lead_in = pending_text # Use it as context
+                last_lead_in = pending_text 
                 pending_text = ""
             
-            # 2. Process Table
             table_sents = table_processing.process_table_smart(block, context=last_lead_in)
             current_section["sentences"].extend(table_sents)
             
-            # Reset context
-            last_lead_in = "Bảng dữ liệu" 
+            last_lead_in = "Bảng dữ liệu"
             in_list_block = False
             continue
 
-        # ==================================================
-        # CASE 2: PARAGRAPH (Text or List)
-        # ==================================================
+        # ------------------------------------
+        # B. HANDLE PARAGRAPHS
+        # ------------------------------------
         if isinstance(block, Paragraph):
+            
+            # 1. IMAGE DETECTION
+            if has_image(block):
+                # If we were already expecting a caption (Image -> Image), 
+                # the previous image had NONE.
+                expecting_caption = True
+                
+                # Check for inline text (rare caption inside image line)
+                raw_text = clean_text(block.text)
+                if raw_text:
+                    current_section["figures"].append({
+                        "caption": raw_text,
+                        "location": len(current_section["sentences"])
+                    })
+                    expecting_caption = False # Found it inline
+                continue
+
+            # 2. TEXT EXTRACTION
             raw_text = clean_text(block.text)
             if not raw_text: continue
 
-            # --- A. CHECK FOR SECTION BREAK ---
+            # 3. CAPTION TRAP (Strict Next-Line Rule)
+            if expecting_caption:
+                # Check strictly for Stop Signals
+                if "</break>" in raw_text:
+                    # Case: Image -> Break (No Caption)
+                    expecting_caption = False 
+                    # Fall through to process the break below...
+                else:
+                    current_section["figures"].append({
+                        "caption": raw_text,
+                        "location": len(current_section["sentences"])
+                    })
+                    expecting_caption = False 
+                    continue # Done. Do not add to body text.
+
+            # 4. BREAK DETECTION
             if "</break>" in raw_text:
-                # Flush pending text to the OLD section
+                # Flush pending text
                 if pending_text:
                     current_section["sentences"].append(pending_text)
                     pending_text = ""
-
-                # Handle the split
+                
                 parts = raw_text.split("</break>")
                 if parts[0].strip():
                     current_section["sentences"].append(parts[0].strip())
-                
-                # Save & Reset
-                if current_section["sentences"]:
+
+                # Save Section
+                if current_section["sentences"] or current_section["figures"]:
                     all_sections.append(current_section)
                 
-                current_section = {"id": current_section["id"] + 1, "sentences": []}
+                # Start New Section
+                current_section = {"id": current_section["id"] + 1, "sentences": [], "figures": []}
                 last_lead_in = ""
                 
-                # Update current text to the new section's part
+                # Process remaining text (Start of new section)
                 raw_text = parts[1].strip()
                 if not raw_text: continue
-            
-            # --- B. CHECK FOR LIST ITEM ---
+
+            # 5. LIST DETECTION
             is_xml_list = is_list_item_xml(block)
             is_regex_list = is_list_item_regex(raw_text)
             
             if is_xml_list or is_regex_list:
-                # 1. FLUSH PREVIOUS BUFFER
+                # Flush previous buffer
                 if pending_text:
                     current_section["sentences"].append(pending_text)
-                    
-                    # --- BUG FIX HERE ---
-                    # Only update context if we were NOT already in a list.
-                    # If we are already in a list, 'pending_text' is just the previous sibling (Item 1).
-                    # We DON'T want Item 2 to inherit Item 1 as its context.
-                    # We want it to keep the ORIGINAL context (the Title).
+                    # FIX: Only update context if we are NOT in a list
                     if not in_list_block:
                         last_lead_in = pending_text 
-                    
                     pending_text = ""
 
-                # 2. Handle List Logic
+                # Handle List Logic
                 if not in_list_block:
                     list_counter = 1
                 else:
@@ -177,53 +207,37 @@ def process_document(file_path):
                 
                 clean_content = raw_text
                 if is_regex_list:
-                    # Remove "1." or "-" marker
-                    clean_content = re.sub(r'^[\s\t]*(?:\d{1,2}[\.\)]|[a-z][\.\)]|[•\-\*°▪])\s+', '', raw_text)
+                    clean_content = re.sub(r'^[\s\t]*(?:\d{1,2}[\.\)]|[a-z][\.\)]|[•\*°▪+])\s+', '', raw_text)
                 
-                # 3. SET TO BUFFER
-                # Uses 'last_lead_in' which is preserved from BEFORE the list started
+                # Set to buffer
                 full_sent = f"{last_lead_in} Bước {list_counter}: {clean_content}"
                 pending_text = full_sent
-                
                 in_list_block = True
-                
-            # --- C. NORMAL TEXT (MERGE LOGIC) ---
+            
+            # 6. NORMAL TEXT (MERGE LOGIC)
             else:
                 first_char = raw_text[0]
                 starts_lowercase = first_char.islower()
                 
-                # CASE C1: MERGE (Continuation of previous block)
                 if starts_lowercase and pending_text:
+                    # Merge into pending (list item or previous sentence)
                     pending_text += " " + raw_text
-                    
-                    # --- CRITICAL FIX ---
-                    # Do NOT reset 'in_list_block' or 'list_counter' here.
-                    # We are still conceptually inside the list item (just reading line 2 of it).
-                    # --------------------
-
-                # CASE C2: NEW SENTENCE
+                    # CRITICAL FIX: Do NOT reset in_list_block here
                 else:
-                    # 1. Save the previous buffer
+                    # New distinct sentence
                     if pending_text:
                         current_section["sentences"].append(pending_text)
-                        
-                        # Only update context if we are NOT currently in a list 
-                        # (prevents a list item from becoming the context for the next normal sentence)
                         if not in_list_block:
                             last_lead_in = pending_text
-                        
-                    # 2. Start new buffer
-                    pending_text = raw_text
                     
-                    # 3. NOW we reset state, because we truly broke the list flow
-                    in_list_block = False
+                    pending_text = raw_text
+                    in_list_block = False # Reset state
                     list_counter = 0
-                
-    # End of Loop: Flush whatever is left in the buffer
+
+    # End of Loop Cleanup
     if pending_text:
         current_section["sentences"].append(pending_text)
-    
-    if current_section["sentences"]:
+    if current_section["sentences"] or current_section["figures"]:
         all_sections.append(current_section)
 
     return all_sections
@@ -232,19 +246,47 @@ def save_to_jsonl(sections, filename, output_dir="results"):
     # 1. Ensure output directory exists
     os.makedirs(output_dir, exist_ok=True)
     output_path = os.path.join(output_dir, "corpus_master.jsonl")
-    
     # 2. Open in 'Append' mode ('a')
     # This ensures you can process files one by one without overwriting previous work
     with open(output_path, 'a', encoding='utf-8') as f:
         for sec in sections:
             # Construct the final record
-            record = {
-                "doc_id": filename,
-                "section_id": sec["id"],
-                "paragraphs": sec["sentences"],
-                # Add any extra metadata here
-            }
-            
+            record = []
+            for i, paragraph in enumerate(sec["sentences"]):
+                sec["sentences"][i] = sent_tokenize(paragraph)
+                for j, sent in enumerate(sec["sentences"][i]):
+                    original_sent = sent
+                    sec["sentences"][i][j] = rdrsegmenter.word_segment(sent)
+                    record.append({
+                        "id": f"{filename}_sec{sec['id']}_para{i+1}_sent{j+1}",
+                        "original_text": original_sent,
+                        "segmented_text": sec["sentences"][i][j],
+                        "tokens": sec["sentences"][i][j][0].split(" "),
+                        "ner_tags": ["O"] * len(sec["sentences"][i][j][0].split(" ")),
+                        "metadata": {
+                            "type": "text",
+                            "source_file": filename,
+                            "section_id": sec["id"]
+                        }
+                    })
+            for i, fig in enumerate(sec["figures"]):
+                sec["figures"][i]["caption"] = sent_tokenize(fig["caption"])
+                for j, sent in enumerate(sec["figures"][i]["caption"]):
+                    original_sent = sent
+                    sec["figures"][i]["caption"][j] = rdrsegmenter.word_segment(sent)
+                    record.append({
+                        "id": f"{filename}_sec{sec['id']}_fig{i+1}_sent{j+1}",
+                        "original_text": original_sent,
+                        "segmented_text": sec["figures"][i]["caption"][j][0],
+                        "tokens": sec["figures"][i]["caption"][j][0].split(" "),
+                        "ner_tags": ["O"] * len(sec["figures"][i]["caption"][j][0].split(" ")),
+                        "metadata": {
+                            "type": "figure_caption",
+                            "source_file": filename,
+                            "section_id": sec["id"],
+                            "figure_location": fig["location"]
+                        }
+                    })
             # Write one line per section
             f.write(json.dumps(record, ensure_ascii=False) + "\n")
 
@@ -254,6 +296,8 @@ if __name__ == "__main__":
     corpus_directory = "corpus"
     extension = ".docx"
     files = locate_corpus_files(corpus_directory, extension)
+    with open(os.path.join("results", "corpus_master.jsonl"), 'w') as log_file:
+        log_file.write("")
     for f in files:
         sections = process_document(f)
         save_to_jsonl(sections, os.path.basename(f))
