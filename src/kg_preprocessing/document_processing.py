@@ -242,6 +242,51 @@ def process_document(file_path):
 
     return all_sections
 
+def merge_broken_headers(sentences):
+    """
+    Detects if a sentence is just a list marker (e.g., "II.", "1.", "A.") 
+    and merges it with the following sentence.
+    
+    Input:  ["II.", "Cách gia giảm:", "Thêm cam thảo."]
+    Output: ["II. Cách gia giảm:", "Thêm cam thảo."]
+    """
+    if not sentences: return []
+    
+    merged_list = []
+    buffer = ""
+    
+    # Regex for "Dangling Markers"
+    # Matches:
+    # 1. Roman Numerals: I., II., IV., X., etc.
+    # 2. Numbers: 1., 2., 10., etc.
+    # 3. Single Letters: A., B., a., b.
+    marker_pattern = re.compile(r"^([IVX]+|\d+|[A-Za-z])\.$")
+    
+    for s in sentences:
+        s = s.strip()
+        
+        # Check if this "sentence" is actually just a marker
+        if marker_pattern.match(s):
+            # It's a dangling marker (e.g., "II.")
+            # Save it in the buffer to attach to the NEXT sentence
+            buffer = s
+        else:
+            # It's a real sentence. 
+            # If we have a buffer waiting (e.g., "II."), join them.
+            if buffer:
+                # Result: "II." + " " + "Cách gia giảm..."
+                combined = f"{buffer} {s}"
+                merged_list.append(combined)
+                buffer = "" # Clear buffer
+            else:
+                merged_list.append(s)
+    
+    # Edge case: If the very last item was a marker (rare, but possible)
+    if buffer:
+        merged_list.append(buffer)
+        
+    return merged_list
+
 def save_to_jsonl(sections, filename, output_dir="results"):
     # 1. Ensure output directory exists
     os.makedirs(output_dir, exist_ok=True)
@@ -254,15 +299,22 @@ def save_to_jsonl(sections, filename, output_dir="results"):
             record = []
             for i, paragraph in enumerate(sec["sentences"]):
                 sec["sentences"][i] = sent_tokenize(paragraph)
+                sec["sentences"][i] = merge_broken_headers(sec["sentences"][i])
                 for j, sent in enumerate(sec["sentences"][i]):
                     original_sent = sent
                     sec["sentences"][i][j] = rdrsegmenter.word_segment(sent)
+                    tokens = []
+                    s = ""
+                    for k in range(len(sec["sentences"][i][j])):
+                        s += sec["sentences"][i][j][k] + " "
+                        tokens.extend(sec["sentences"][i][j][k].split(" "))
+                    s = s.strip()
                     record.append({
                         "id": f"{filename}_sec{sec['id']}_para{i+1}_sent{j+1}",
                         "original_text": original_sent,
-                        "segmented_text": sec["sentences"][i][j],
-                        "tokens": sec["sentences"][i][j][0].split(" "),
-                        "ner_tags": ["O"] * len(sec["sentences"][i][j][0].split(" ")),
+                        "segmented_text": s,
+                        "tokens": tokens,
+                        "ner_tags": ["O"] * len(tokens),
                         "metadata": {
                             "type": "text",
                             "source_file": filename,
@@ -271,15 +323,22 @@ def save_to_jsonl(sections, filename, output_dir="results"):
                     })
             for i, fig in enumerate(sec["figures"]):
                 sec["figures"][i]["caption"] = sent_tokenize(fig["caption"])
+                sec["figures"][i]["caption"] = merge_broken_headers(sec["figures"][i]["caption"])
                 for j, sent in enumerate(sec["figures"][i]["caption"]):
                     original_sent = sent
                     sec["figures"][i]["caption"][j] = rdrsegmenter.word_segment(sent)
+                    tokens = []
+                    s = ""
+                    for k in range(len(sec["figures"][i]["caption"][j])):
+                        s += sec["figures"][i]["caption"][j][k] + " "
+                        tokens.extend(sec["figures"][i]["caption"][j][k].split(" "))
+                    s = s.strip()
                     record.append({
                         "id": f"{filename}_sec{sec['id']}_fig{i+1}_sent{j+1}",
                         "original_text": original_sent,
-                        "segmented_text": sec["figures"][i]["caption"][j][0],
-                        "tokens": sec["figures"][i]["caption"][j][0].split(" "),
-                        "ner_tags": ["O"] * len(sec["figures"][i]["caption"][j][0].split(" ")),
+                        "segmented_text": s,
+                        "tokens": tokens,
+                        "ner_tags": ["O"] * len(tokens),
                         "metadata": {
                             "type": "figure_caption",
                             "source_file": filename,
